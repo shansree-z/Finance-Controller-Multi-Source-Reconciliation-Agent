@@ -1,0 +1,84 @@
+import csv
+import random
+from datetime import datetime, timedelta
+
+random.seed(42)  # reproducibility — judges can rerun and get the same set
+
+N = 60  # >50 as required by the brief
+
+settlement_rows = []
+ledger_rows = []
+
+for i in range(N):
+    order_id = f"ORD{1000+i}"
+    amount = round(random.uniform(200, 5000), 2)
+    created_on = datetime(2026, 7, 1) + timedelta(days=random.randint(0, 20))
+
+    outcome = random.choices(
+        ["exact", "mismatch", "duplicate", "missing_settlement",
+         "missing_ledger", "partial_refund"],
+        weights=[55, 10, 8, 10, 8, 9]
+    )[0]
+
+    ledger_rows.append({
+        "order_id": order_id, "customer": f"cust_{i}",
+        "amount": amount, "status": "paid",
+        "created_on": created_on.date().isoformat(),
+        "refund_amount": 0
+    })
+
+    settled_on = created_on + timedelta(days=random.randint(1, 3))
+
+    if outcome == "exact":
+        settlement_rows.append({
+            "settlement_id": f"STL{2000+i}", "payment_id": f"pay_{i}",
+            "order_id": order_id, "amount": amount,
+            "utr": f"UTR{i}", "settled_on": settled_on.date().isoformat(),
+            "fee": round(amount * 0.02, 2), "tax": round(amount * 0.0036, 2)
+        })
+    elif outcome == "mismatch":
+        settlement_rows.append({
+            "settlement_id": f"STL{2000+i}", "payment_id": f"pay_{i}",
+            "order_id": order_id, "amount": round(amount - random.uniform(1, 15), 2),
+            "utr": f"UTR{i}", "settled_on": settled_on.date().isoformat(),
+            "fee": round(amount * 0.02, 2), "tax": round(amount * 0.0036, 2)
+        })
+    elif outcome == "duplicate":
+        for dup in range(2):
+            settlement_rows.append({
+                "settlement_id": f"STL{2000+i}{dup}", "payment_id": f"pay_{i}",
+                "order_id": order_id, "amount": amount,
+                "utr": f"UTR{i}{dup}", "settled_on": settled_on.date().isoformat(),
+                "fee": round(amount * 0.02, 2), "tax": round(amount * 0.0036, 2)
+            })
+    elif outcome == "missing_settlement":
+        pass  # exists in ledger, no settlement row at all
+    elif outcome == "missing_ledger":
+        ledger_rows.pop()  # remove the ledger row we just added
+        settlement_rows.append({
+            "settlement_id": f"STL{2000+i}", "payment_id": f"pay_{i}",
+            "order_id": order_id, "amount": amount,
+            "utr": f"UTR{i}", "settled_on": settled_on.date().isoformat(),
+            "fee": round(amount * 0.02, 2), "tax": round(amount * 0.0036, 2)
+        })
+    elif outcome == "partial_refund":
+        refund = round(amount * random.uniform(0.2, 0.6), 2)
+        ledger_rows[-1]["refund_amount"] = refund
+        settlement_rows.append({
+            "settlement_id": f"STL{2000+i}", "payment_id": f"pay_{i}",
+            "order_id": order_id, "amount": round(amount - refund, 2),
+            "utr": f"UTR{i}", "settled_on": settled_on.date().isoformat(),
+            "fee": round(amount * 0.02, 2), "tax": round(amount * 0.0036, 2)
+        })
+
+with open("data/internal_ledger.csv", "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=ledger_rows[0].keys())
+    writer.writeheader()
+    writer.writerows(ledger_rows)
+
+with open("data/settlement_report.csv", "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=settlement_rows[0].keys())
+    writer.writeheader()
+    writer.writerows(settlement_rows)
+
+print(f"Generated {len(ledger_rows)} ledger rows, {len(settlement_rows)} settlement rows")
