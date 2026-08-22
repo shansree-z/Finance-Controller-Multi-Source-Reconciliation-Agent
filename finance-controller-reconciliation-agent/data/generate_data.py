@@ -8,17 +8,21 @@ N = 60  # >50 as required by the brief
 
 settlement_rows = []
 ledger_rows = []
-
+ground_truth_rows = []
 for i in range(N):
     order_id = f"ORD{1000+i}"
     amount = round(random.uniform(200, 5000), 2)
     created_on = datetime(2026, 7, 1) + timedelta(days=random.randint(0, 20))
+    
+    
 
     outcome = random.choices(
         ["exact", "mismatch", "duplicate", "missing_settlement",
          "missing_ledger", "partial_refund"],
         weights=[55, 10, 8, 10, 8, 9]
     )[0]
+
+    ground_truth_rows.append({"order_id": order_id, "true_outcome": outcome})
 
     ledger_rows.append({
         "order_id": order_id, "customer": f"cust_{i}",
@@ -80,5 +84,11 @@ with open("data/settlement_report.csv", "w", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=settlement_rows[0].keys())
     writer.writeheader()
     writer.writerows(settlement_rows)
+
+with open("data/ground_truth.csv", "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=["order_id", "true_outcome"])
+    writer.writeheader()
+    writer.writerows(ground_truth_rows)
+
 
 print(f"Generated {len(ledger_rows)} ledger rows, {len(settlement_rows)} settlement rows")
