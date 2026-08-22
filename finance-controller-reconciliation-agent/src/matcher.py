@@ -34,3 +34,26 @@ def exact_match(ledger, settlement, tolerance=0.01):
                              "reason": f"amount diff of {round(s_amount - expected_amount, 2)} — needs review"})
 
     return pd.DataFrame(results)
+
+def match_bank_confirmation(settlement, bank, tolerance=0.01):
+    results = []
+    bank_by_utr = bank.set_index("utr")
+
+    for _, s_row in settlement.iterrows():
+        utr = s_row["utr"]
+        if utr not in bank_by_utr.index:
+            results.append({"utr": utr, "order_id": s_row["order_id"],
+                             "bank_status": "UNCONFIRMED",
+                             "reason": "settlement exists but no bank credit found — possible payout failure"})
+            continue
+
+        b_row = bank_by_utr.loc[utr]
+        if abs(b_row["amount"] - s_row["amount"]) <= tolerance:
+            results.append({"utr": utr, "order_id": s_row["order_id"],
+                             "bank_status": "CONFIRMED", "reason": "bank credit matches settlement"})
+        else:
+            results.append({"utr": utr, "order_id": s_row["order_id"],
+                             "bank_status": "AMOUNT_MISMATCH",
+                             "reason": f"bank credited {b_row['amount']}, settlement says {s_row['amount']}"})
+
+    return pd.DataFrame(results)

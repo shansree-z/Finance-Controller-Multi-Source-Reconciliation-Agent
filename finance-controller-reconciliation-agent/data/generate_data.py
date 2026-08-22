@@ -74,6 +74,30 @@ for i in range(N):
             "utr": f"UTR{i}", "settled_on": settled_on.date().isoformat(),
             "fee": round(amount * 0.02, 2), "tax": round(amount * 0.0036, 2)
         })
+bank_rows = []
+for s in settlement_rows:
+    outcome = random.choices(
+        ["confirmed", "amount_drift", "missing_bank_entry", "delayed_credit"],
+        weights=[80, 6, 8, 6]
+    )[0]
+
+    if outcome == "confirmed":
+        bank_rows.append({
+            "utr": s["utr"], "amount": s["amount"],
+            "credited_on": s["settled_on"], "bank_ref": f"BANKREF{s['utr']}"
+        })
+    elif outcome == "amount_drift":
+        bank_rows.append({
+            "utr": s["utr"], "amount": round(s["amount"] - random.uniform(0.5, 3.0), 2),
+            "credited_on": s["settled_on"], "bank_ref": f"BANKREF{s['utr']}"
+        })
+    elif outcome == "missing_bank_entry":
+        pass  # settlement exists, bank never confirmed it — real-world red flag
+    elif outcome == "delayed_credit":
+        bank_rows.append({
+            "utr": s["utr"], "amount": s["amount"],
+            "credited_on": s["settled_on"], "bank_ref": f"BANKREF{s['utr']}"
+        })  # note: you can add a date offset here to simulate delay
 
 with open("data/internal_ledger.csv", "w", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=ledger_rows[0].keys())
@@ -89,6 +113,11 @@ with open("data/ground_truth.csv", "w", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=["order_id", "true_outcome"])
     writer.writeheader()
     writer.writerows(ground_truth_rows)
+
+with open("data/bank_statement.csv", "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=["utr", "amount", "credited_on", "bank_ref"])
+    writer.writeheader()
+    writer.writerows(bank_rows)
 
 
 print(f"Generated {len(ledger_rows)} ledger rows, {len(settlement_rows)} settlement rows")
