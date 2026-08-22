@@ -30,3 +30,25 @@ def resolve_ambiguous(row, ledger_row, settlement_rows):
         return json.loads(text)
     except json.JSONDecodeError:
         return {"decision": "EXCEPTION", "reason": "model returned non-JSON response", "confidence": 0}
+
+
+import time
+
+def resolve_with_retry(row, ledger_row, settlement_rows, max_retries=1):
+    """
+    Wraps resolve_ambiguous with retry + graceful degradation.
+    If Gemini fails (timeout, rate limit, network error) even after
+    one retry, the row is marked as an exception instead of crashing
+    the whole batch.
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            return resolve_ambiguous(row, ledger_row, settlement_rows)
+        except Exception as e:
+            if attempt == max_retries:
+                return {
+                    "decision": "EXCEPTION",
+                    "reason": f"agent call failed after retry: {e}",
+                    "confidence": 0,
+                }
+            time.sleep(2 ** attempt)  # brief backoff before retrying
