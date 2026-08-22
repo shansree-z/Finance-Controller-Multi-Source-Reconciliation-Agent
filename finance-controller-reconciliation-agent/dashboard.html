@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Reconciliation Dashboard</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background: #0f1117; color: #e5e7eb; padding: 40px; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .subtitle { color: #9ca3af; margin-bottom: 30px; }
+  .cards { display: flex; gap: 16px; margin-bottom: 30px; flex-wrap: wrap; }
+  .card { background: #1a1d27; border-radius: 10px; padding: 20px 24px; min-width: 160px; }
+  .card .value { font-size: 28px; font-weight: 700; }
+  .card .label { font-size: 13px; color: #9ca3af; margin-top: 4px; }
+  .green { color: #4ade80; } .yellow { color: #facc15; } .red { color: #f87171; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #2a2d3a; font-size: 14px; }
+  th { color: #9ca3af; font-weight: 600; }
+  .section-title { font-size: 16px; margin: 30px 0 10px; }
+</style>
+</head>
+<body>
+  <h1>Finance Controller — Reconciliation Dashboard</h1>
+  <div class="subtitle">Auto-generated from the latest run of run_demo.py</div>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="section-title">Exception List (needs human review)</div>
+  <table id="exceptionTable">
+    <thead><tr><th>Order ID</th><th>Reason</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+<script>
+fetch('dashboard_data.json')
+  .then(r => r.json())
+  .then(data => {
+    const overallMatched = data.deterministic_matched + data.resolved_by_agent;
+    const rate = ((overallMatched / data.total) * 100).toFixed(1);
+
+    document.getElementById('cards').innerHTML = `
+      <div class="card"><div class="value">${data.total}</div><div class="label">Total records</div></div>
+      <div class="card"><div class="value green">${data.deterministic_matched}</div><div class="label">Deterministic matches</div></div>
+      <div class="card"><div class="value yellow">${data.resolved_by_agent}</div><div class="label">Agent-resolved</div></div>
+      <div class="card"><div class="value red">${data.exceptions.length}</div><div class="label">Exceptions</div></div>
+      <div class="card"><div class="value">${rate}%</div><div class="label">Overall match rate</div></div>
+    `;
+
+    const tbody = document.querySelector('#exceptionTable tbody');
+    data.exceptions.forEach(e => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${e.order_id}</td><td>${e.reason}</td>`;
+      tbody.appendChild(tr);
+    });
+  });
+</script>
+</body>
+</html>
