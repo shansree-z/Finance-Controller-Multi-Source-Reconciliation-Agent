@@ -1,6 +1,6 @@
 from src.matcher import load_data, exact_match, match_bank_confirmation
 from src.fuzzy_resolver import resolve_with_retry
-from src.report import generate_report, compare_to_ground_truth
+from src.report import generate_report, compare_to_ground_truth, precision_recall_summary
 import pandas as pd
 import json
 
@@ -49,7 +49,14 @@ print("\nGenerating report...\n")
 generate_report(matched_df, resolved)
 
 try:
-    compare_to_ground_truth(matched_df, resolved)
+    gt_total = len(pd.read_csv("data/ground_truth.csv"))
+    gt_result = compare_to_ground_truth(matched_df, resolved)
+    precision_recall_summary(
+        correct=int(gt_result["accuracy"] * gt_total),
+        false_positives=gt_result["false_positives"],
+        false_negatives=gt_result["false_negatives"],
+        total=gt_total,
+    )
 except FileNotFoundError:
     print("\n(Skipping ground-truth comparison — no ground_truth.csv found)")
 
