@@ -59,3 +59,7 @@ ORD1056,exact
 ORD1057,missing_ledger
 ORD1058,exact
 ORD1059,duplicate
+ORD9001,tz_drift_not_an_error
+ORD9002,legitimate_split_settlement
+ORD9003,fee_only_explainable
+ORD9004,chargeback_reversal
