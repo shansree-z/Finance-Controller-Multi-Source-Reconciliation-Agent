@@ -47,7 +47,16 @@ def match_bank_confirmation(settlement, bank, tolerance=0.01):
                              "reason": "settlement exists but no bank credit found — possible payout failure"})
             continue
 
-        b_row = bank_by_utr.loc[utr]
+        b_match = bank_by_utr.loc[[utr]]  # always returns a DataFrame, even for one match
+
+        if len(b_match) > 1:
+            results.append({"utr": utr, "order_id": s_row["order_id"],
+                             "bank_status": "DUPLICATE_BANK_ENTRY",
+                             "reason": f"{len(b_match)} bank entries found for this UTR — needs review"})
+            continue
+
+        b_row = b_match.iloc[0]  # safely extract the single row now
+
         if abs(b_row["amount"] - s_row["amount"]) <= tolerance:
             results.append({"utr": utr, "order_id": s_row["order_id"],
                              "bank_status": "CONFIRMED", "reason": "bank credit matches settlement"})

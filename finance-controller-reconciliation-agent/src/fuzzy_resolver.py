@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from google import genai
 from dotenv import load_dotenv
 
@@ -13,6 +14,7 @@ SYSTEM_PROMPT = (
     "EXCEPTION (needs human review). If uncertain, return EXCEPTION. "
     'Respond with ONLY strict JSON: {"decision": "MATCH or EXCEPTION", "reason": "...", "confidence": 0.0-1.0}'
 )
+
 
 def resolve_ambiguous(row, ledger_row, settlement_rows):
     user_prompt = (
@@ -32,23 +34,31 @@ def resolve_ambiguous(row, ledger_row, settlement_rows):
         return {"decision": "EXCEPTION", "reason": "model returned non-JSON response", "confidence": 0}
 
 
-import time
-
 def resolve_with_retry(row, ledger_row, settlement_rows, max_retries=1):
     """
-    Wraps resolve_ambiguous with retry + graceful degradation.
-    If Gemini fails (timeout, rate limit, network error) even after
-    one retry, the row is marked as an exception instead of crashing
-    the whole batch.
+    Wraps resolve_ambiguous with rate-limit-safe delay, retry, and
+    graceful degradation. If Gemini fails even after one retry, the
+    row is marked as a clean, readable exception instead of crashing
+    the whole batch or dumping raw error JSON into the report.
     """
     for attempt in range(max_retries + 1):
         try:
-            return resolve_ambiguous(row, ledger_row, settlement_rows)
+            result = resolve_ambiguous(row, ledger_row, settlement_rows)
+            time.sleep(13)  # stay under free-tier ~5 requests/minute
+            return result
         except Exception as e:
             if attempt == max_retries:
+                error_str = str(e)
+                if "RESOURCE_EXHAUSTED" in error_str or "429" in error_str:
+                    reason = "Agent temporarily unavailable (API rate limit reached) — flagged for manual review"
+                elif "timeout" in error_str.lower():
+                    reason = "Agent call timed out — flagged for manual review"
+                else:
+                    reason = f"Agent call failed unexpectedly — flagged for manual review ({error_str[:100]})"
+
                 return {
                     "decision": "EXCEPTION",
-                    "reason": f"agent call failed after retry: {e}",
+                    "reason": reason,
                     "confidence": 0,
                 }
-            time.sleep(2 ** attempt)  # brief backoff before retrying
+            time.sleep(20)  # longer backoff before retrying
