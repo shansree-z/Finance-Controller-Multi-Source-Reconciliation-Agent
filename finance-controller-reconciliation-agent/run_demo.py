@@ -2,6 +2,7 @@ from src.matcher import load_data, exact_match, match_bank_confirmation
 from src.fuzzy_resolver import resolve_with_retry
 from src.report import generate_report, compare_to_ground_truth
 import pandas as pd
+import json
 
 print("Loading data...")
 ledger, settlement = load_data(
@@ -24,20 +25,14 @@ print(f"Unconfirmed or mismatched: {len(unconfirmed)}")
 exceptions = matched_df[matched_df["status"] != "MATCHED"]
 print(f"\n{len(exceptions)} ambiguous/unmatched rows sent to Gemini for review...")
 
+resolved = []
 for idx, (_, row) in enumerate(exceptions.iterrows(), 1):
     print(f"[{idx}/{len(exceptions)}] Calling Gemini for order {row['order_id']}...")
     ledger_row = ledger[ledger["order_id"] == row["order_id"]].iloc[0]
     settlement_rows = settlement[settlement["order_id"] == row["order_id"]]
+
     decision = resolve_with_retry(row, ledger_row, settlement_rows)
     print(f"    -> {decision['decision']} (confidence: {decision.get('confidence', 'N/A')})")
-    
-
-resolved = []
-for _, row in exceptions.iterrows():
-    ledger_row = ledger[ledger["order_id"] == row["order_id"]].iloc[0]
-    settlement_rows = settlement[settlement["order_id"] == row["order_id"]]
-
-    decision = resolve_with_retry(row, ledger_row, settlement_rows)
 
     final_status = (
         "RESOLVED"
@@ -53,12 +48,10 @@ for _, row in exceptions.iterrows():
 print("\nGenerating report...\n")
 generate_report(matched_df, resolved)
 
-# Optional: only works if you created data/ground_truth.csv in Phase 5
 try:
     compare_to_ground_truth(matched_df, resolved)
 except FileNotFoundError:
     print("\n(Skipping ground-truth comparison — no ground_truth.csv found)")
-import json
 
 summary = {
     "total": len(matched_df),
@@ -71,3 +64,5 @@ summary = {
 }
 with open("dashboard_data.json", "w") as f:
     json.dump(summary, f, indent=2)
+
+print("\nDone.")
