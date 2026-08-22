@@ -1,11 +1,24 @@
 import pandas as pd
 
 def load_data(ledger_path, settlement_path):
-    ledger = pd.read_csv(ledger_path)
-    settlement = pd.read_csv(settlement_path)
+    try:
+        ledger = pd.read_csv(ledger_path)
+        settlement = pd.read_csv(settlement_path)
+    except FileNotFoundError as e:
+        raise SystemExit(f"Required data file missing: {e}. Run data/generate_data.py first.")
+
+    required_ledger_cols = {"order_id", "amount"}
+    required_settlement_cols = {"order_id", "amount", "utr"}
+    if not required_ledger_cols.issubset(ledger.columns):
+        raise SystemExit(f"Ledger CSV missing required columns: {required_ledger_cols - set(ledger.columns)}")
+    if not required_settlement_cols.issubset(settlement.columns):
+        raise SystemExit(f"Settlement CSV missing required columns: {required_settlement_cols - set(settlement.columns)}")
+
     return ledger, settlement
 
+
 def exact_match(ledger, settlement, tolerance=0.01):
+    ledger = ledger.dropna(subset=["amount"]).copy()
     results = []
     settlement_by_order = settlement.groupby("order_id")
 
@@ -35,6 +48,7 @@ def exact_match(ledger, settlement, tolerance=0.01):
 
     return pd.DataFrame(results)
 
+
 def match_bank_confirmation(settlement, bank, tolerance=0.01):
     results = []
     bank_by_utr = bank.set_index("utr")
@@ -47,7 +61,7 @@ def match_bank_confirmation(settlement, bank, tolerance=0.01):
                              "reason": "settlement exists but no bank credit found — possible payout failure"})
             continue
 
-        b_match = bank_by_utr.loc[[utr]]  # always returns a DataFrame, even for one match
+        b_match = bank_by_utr.loc[[utr]]
 
         if len(b_match) > 1:
             results.append({"utr": utr, "order_id": s_row["order_id"],
@@ -55,7 +69,7 @@ def match_bank_confirmation(settlement, bank, tolerance=0.01):
                              "reason": f"{len(b_match)} bank entries found for this UTR — needs review"})
             continue
 
-        b_row = b_match.iloc[0]  # safely extract the single row now
+        b_row = b_match.iloc[0]
 
         if abs(b_row["amount"] - s_row["amount"]) <= tolerance:
             results.append({"utr": utr, "order_id": s_row["order_id"],
